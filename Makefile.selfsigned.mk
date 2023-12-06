@@ -115,7 +115,7 @@ root-key.pem:
 	@echo "done"
 
 %/keystore.conf:
-	@echo "keytool.genkeypair = -dname 'cn=$(ALIAS),OU=Delivery,o=Defense Unicorns,c=US,L=Orlando,ST=FL' -storepass $(STOREPASS)\n\
+	@echo "keytool.genkeypair = -dname 'cn=$(ALIAS),o=Defense Unicorns,c=US,L=Orlando,ST=Florida' -storepass $(STOREPASS)\n\
 	keytool.all = -storepass $(STOREPASS)" > $@
 
 %/keystore-tmp.jks: %/keystore.conf
