@@ -1,13 +1,16 @@
-.SUFFIXES: .csr .pem .conf .crt
+.SUFFIXES: .csr .pem .conf .crt .jks
 .PRECIOUS: %/ca-key.pem %/ca-cert.pem %/cert-chain.pem
 .PRECIOUS: %/workload-cert.pem %/key.pem %/workload-cert-chain.pem %/workload-cert.crt
-.SECONDARY: root-cert.csr %/cluster-ca.csr
+.PRECIOUS: %/keystore.jks %/truststore.jks
+.SECONDARY: root-cert.csr %/cluster-ca.csr %/keystore-tmp.jks
 
 .DEFAULT_GOAL := help
 
 ROOTCA_DAYS := 375
 INTERMEDIATE_DAYS := 3600
 WORKLOAD_DAYS := 375
+STOREPASS := secret
+ALIAS := bigbang.dev
 
 #------------------------------------------------------------------------
 ##help:		print this help message
@@ -96,3 +99,40 @@ root-key.pem:
 	@echo "generating $@"
 	@mkdir -p $(dir $@)
 	@openssl genrsa -out $@ 2048
+
+#------------------------------------------------------------------------
+##<namespace>-jks: generate a keystore and truststore signed by an intermediate certificate in <namespace>
+.PHONY: $-jks
+
+%-tst: %/keystore.jks %/truststore.jks
+	@echo "done"
+
+%/keystore.jks: %/keystore.pem %/ca-cert.pem
+	@echo "Adding signatures to keystore"
+	@keytool -conf $(dir $<)/keystore.conf -keystore $@ -alias CARoot -importcert -file $(dir $<)/ca-cert.pem
+	@keytool -conf $(dir $<)/keystore.conf -keystore $@ -alias $(ALIAS) -importcert -file $<
+	@echo "CA and signed cert added to keystore"
+	@echo "done"
+
+%/keystore.conf:
+	@echo "keytool.genkeypair = -dname 'cn=$(ALIAS),OU=Delivery,o=Defense Unicorns,c=US,L=Orlando,ST=FL' -storepass $(STOREPASS)\n\
+	keytool.all = -storepass $(STOREPASS)" > $@
+
+%/keystore-tmp.jks: %/keystore.conf
+	@echo "Generating keystore"
+	@keytool -conf $< -keystore $@ -alias $(ALIAS) -keyalg RSA -genkey
+
+%/keystore.csr: %/keystore-tmp.jks %/keystore.conf
+	@echo "Exporting certificate -> $@"
+	@keytool -conf $(dir $<)/keystore.conf -keystore $< -alias $(ALIAS) -certreq -file $@
+
+%/truststore.jks: %/ca-cert.pem %/keystore.conf
+	@echo "Creating trust store"
+	@keytool -conf $(dir $<)/keystore.conf -keystore $@ -alias CARoot -importcert -file $<
+
+%/keystore.pem: %/keystore.csr %/ca-cert.pem %/ca-key.pem
+	@echo "Signing certificate"
+	@openssl x509 -req -sha256 -days $(WORKLOAD_DAYS) \
+		-CA $(dir $<)/ca-cert.pem -CAkey $(dir $<)/ca-key.pem \
+		-CAcreateserial \
+		-in $< -out $@
