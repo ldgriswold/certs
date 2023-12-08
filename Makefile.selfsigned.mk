@@ -104,7 +104,7 @@ root-key.pem:
 ##<namespace>-jks: generate a keystore and truststore signed by an intermediate certificate in <namespace>
 .PHONY: $-jks
 
-%-tst: %/keystore.jks %/truststore.jks
+%-jks: %/keystore.jks %/truststore.jks
 	@echo "done"
 
 %/keystore.jks: %/keystore.pem %/ca-cert.pem
